@@ -1,0 +1,14 @@
+opencv-python
+ultralytics
+pywin32
+pillow
+cvzone
+pyinstaller
+python-telegram-bot
+pytz
+datetime
+asyncio
+numpy
+threading
+PIL
+pandas

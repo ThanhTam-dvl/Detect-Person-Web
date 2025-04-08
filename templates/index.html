@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detect Objects On Region</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            background-color: #f4f7fa;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 2.5rem;
+            text-align: center;
+        }
+
+        .video-container {
+            width: 100%;
+            max-width: 1020px;
+            margin-bottom: 20px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        #video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .controls button, .controls select, .controls input[type="text"], .controls input[type="file"] {
+            padding: 10px 15px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+        }
+
+        .controls button {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .controls button:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        .controls button.active {
+            background-color: #28a745;
+        }
+
+        .controls button.active:hover {
+            background-color: #218838;
+        }
+
+        .controls select {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            color: #333;
+        }
+
+        .controls input[type="text"], .controls input[type="file"] {
+            border: 1px solid #ddd;
+            background-color: #fff;
+        }
+
+        .controls label {
+            margin-right: 5px;
+            font-size: 1rem;
+            color: #555;
+        }
+
+        .status {
+            margin-top: 10px;
+            font-size: 1rem;
+            color: #555;
+            text-align: center;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .video-container {
+                max-width: 100%;
+            }
+
+            .controls {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .controls button, .controls select, .controls input[type="text"], .controls input[type="file"] {
+                width: 100%;
+                max-width: 300px;
+                margin-bottom: 10px;
+            }
+
+            .controls label {
+                margin-bottom: 5px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            .controls button, .controls select, .controls input[type="text"], .controls input[type="file"] {
+                font-size: 0.9rem;
+                padding: 8px 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Detect Objects On Region</h1>
+    <div class="video-container">
+        <img id="video" src="{{ url_for('video_feed') }}" alt="Video Feed">
+    </div>
+
+    <div class="controls">
+        <button id="start-btn" onclick="start()">Start Webcam</button>
+        <button id="stop-btn" onclick="stop()">Stop</button>
+        <button id="pause-btn" onclick="pauseResume()">Pause/Resume</button>
+        <button id="reset-btn" onclick="reset()">Reset Points</button>
+        <button id="draw-area-btn" onclick="toggleDrawArea()">Enable Draw Area</button>
+        <button id="warning-btn" onclick="toggleWarning()">Enable Warning</button>
+    </div>
+
+    <div class="controls">
+        <form id="upload-form" enctype="multipart/form-data">
+            <label for="file">Select Video File:</label>
+            <input type="file" id="file" name="file" accept="video/*">
+            <button type="button" onclick="uploadFile()">Upload and Play</button>
+        </form>
+    </div>
+
+    <div class="controls">
+        <label for="class_select">Select Class:</label>
+        <select id="class_select" onchange="setClass()">
+            <option value="All">All</option>
+            {% for class in classes %}
+                <option value="{{ class }}">{{ class }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="controls">
+        <label for="telegram_token">Telegram Token:</label>
+        <input type="text" id="telegram_token" placeholder="Enter token">
+        <label for="telegram_id">Telegram ID:</label>
+        <input type="text" id="telegram_id" placeholder="Enter chat ID">
+        <button onclick="setTelegram()">Set Telegram</button>
+    </div>
+
+    <div id="loading" style="display: none;">Loading...</div>
+
+    <script>
+        const video = document.getElementById('video');
+        const drawAreaBtn = document.getElementById('draw-area-btn');
+        const warningBtn = document.getElementById('warning-btn');
+        const statusDiv = document.getElementById('status');
+        let drawAreaEnabled = false;
+        let warningEnabled = false;
+
+        video.addEventListener('click', function(e) {
+            if (!drawAreaEnabled) return; // Chỉ thêm điểm nếu chế độ vẽ được bật
+            const rect = video.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            fetch('/set_area', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `x=${x}&y=${y}`
+            });
+        });
+
+        function start() {
+            fetch('/start', { method: 'POST' });
+        }
+
+        function stop() {
+            fetch('/stop', { method: 'POST' });
+        }
+
+        function pauseResume() {
+            fetch('/pause_resume', { method: 'POST' });
+        }
+
+        function reset() {
+            fetch('/reset', { method: 'POST' });
+        }
+
+        function toggleDrawArea() {
+            fetch('/toggle_draw_area', { method: 'POST' });
+            drawAreaEnabled = !drawAreaEnabled;
+            drawAreaBtn.textContent = drawAreaEnabled ? 'Disable Draw Area' : 'Enable Draw Area';
+            drawAreaBtn.classList.toggle('active', drawAreaEnabled);
+            updateStatus();
+        }
+
+        function toggleWarning() {
+            fetch('/toggle_warning', { method: 'POST' });
+            warningEnabled = !warningEnabled;
+            warningBtn.textContent = warningEnabled ? 'Disable Warning' : 'Enable Warning';
+            warningBtn.classList.toggle('active', warningEnabled);
+            updateStatus();
+        }
+
+        function setClass() {
+            const classSelect = document.getElementById('class_select').value;
+            fetch('/set_class', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `class=${classSelect}`
+            });
+        }
+
+        function setTelegram() {
+            const token = document.getElementById('telegram_token').value;
+            const chatId = document.getElementById('telegram_id').value;
+            fetch('/set_telegram', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `token=${token}&chat_id=${chatId}`
+            }).then(response => response.text())
+              .then(data => alert(data));
+        }
+
+        function uploadFile() {
+        document.getElementById('loading').style.display = 'block';
+        const form = document.getElementById('upload-form');
+        const formData = new FormData(form);
+        fetch('/upload', {
+            method: 'POST',
+            body: formData
+        }).then(response => response.text())
+          .then(data => {
+              alert(data);
+              document.getElementById('loading').style.display = 'none';
+          })
+          .catch(error => {
+              alert("Error: " + error);
+              document.getElementById('loading').style.display = 'none';
+          });
+        }
+
+        function updateStatus() {
+            const drawStatus = drawAreaEnabled ? 'enabled' : 'disabled';
+            const warningStatus = warningEnabled ? 'enabled' : 'disabled';
+            statusDiv.textContent = `Status: Draw Area is ${drawStatus}, Warning is ${warningStatus}`;
+        }
+    </script>
+</head>
+<body>
